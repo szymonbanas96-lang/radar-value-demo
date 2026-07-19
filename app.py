@@ -146,15 +146,14 @@ st.subheader("Radar board")
 show_cols = ["player","team","line","projection","edge","radar_score","pick"]
 board = df[show_cols].copy()
 board.columns = ["Player","Team","Line","Projection","Edge","Radar Score","Signal"]
+board["Line"]=board["Line"].map(lambda x:f"{x:.1f}")
+board["Projection"]=board["Projection"].map(lambda x:f"{x:.1f}")
+board["Edge"]=board["Edge"].map(lambda x:f"{x:+.1f}")
+board["Radar Score"]=board["Radar Score"].map(lambda x:f"{x:.1f}")
+
 st.dataframe(
-    board.style.format({
-        "Line":"{:.1f}",
-        "Projection":"{:.1f}",
-        "Edge":"{:+.1f}",
-        "Radar Score":"{:.1f}"
-    }).background_gradient(subset=["Radar Score"]),
-    use_container_width=True,
-    hide_index=True
+    board,
+    use_container_width=True
 )
 
 st.subheader("Dlaczego model tak ocenił zawodników?")
@@ -188,10 +187,11 @@ if reveal:
     st.metric("Skuteczność demo", f"{hits}/{total}", f"{hits/total:.0%}")
     result_view = df[["player","line","projection","pick","actual","result"]].copy()
     result_view.columns = ["Player","Line","Projection","Pick","Actual points","Result"]
+    result_view["Line"]=result_view["Line"].map(lambda x:f"{x:.1f}")
+    result_view["Projection"]=result_view["Projection"].map(lambda x:f"{x:.1f}")
     st.dataframe(
-        result_view.style.format({"Line":"{:.1f}","Projection":"{:.1f}"}),
-        use_container_width=True,
-        hide_index=True
+        result_view,
+        use_container_width=True
     )
     st.caption("To pojedynczy mecz i nie jest dowodem przewagi modelu. To prototyp ekranu oraz mechanizmu backtestu.")
 else:
