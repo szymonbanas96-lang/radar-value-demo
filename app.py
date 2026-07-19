@@ -1,259 +1,179 @@
 import subprocess
 import sys
-import streamlit as st
+from pathlib import Path
+
 import pandas as pd
-import os
+import streamlit as st
+
+from components.cards import render_metrics, render_player_cards, render_top_pick
+from components.data import grade_results, load_data
+from components.header import render_header, render_section
+from components.theme import load_theme
+
+ROOT = Path(__file__).resolve().parent
+FAVICON = ROOT / "assets" / "favicon.png"
 
 st.set_page_config(
-    page_title="Radar Value 2.0",
-    layout="wide"
+    page_title="Radar Value",
+    page_icon=str(FAVICON) if FAVICON.exists() else "📡",
+    layout="wide",
+    initial_sidebar_state="collapsed",
 )
 
-if os.path.exists("history.csv"):
-    history_df = pd.read_csv("history.csv")
-else:
-    history_df = pd.DataFrame()
+load_theme()
+render_header()
 
-if os.path.exists("results.csv"):
-    results_df = pd.read_csv("results.csv")
-else:
-    results_df = pd.DataFrame()
+radar_df, history_df, results_df = load_data()
+results_df = grade_results(results_df)
 
-    # auto grading
-if not results_df.empty:
+refresh_col, info_col = st.columns([1, 4])
 
-    def calculate_result(row):
+with refresh_col:
+    refresh_clicked = st.button("📡 Scan Radar", use_container_width=True)
 
-        if pd.isna(row["actual_pra"]):
-            return ""
-
-        if row["prediction"] == "OVER":
-
-            if row["actual_pra"] > row["book_line"]:
-                return "WIN"
-            else:
-                return "LOSS"
-
-        elif row["prediction"] == "UNDER":
-
-            if row["actual_pra"] < row["book_line"]:
-                return "WIN"
-            else:
-                return "LOSS"
-
-        return ""
-
-    results_df["result"] = results_df.apply(
-        calculate_result,
-        axis=1
+with info_col:
+    st.caption(
+        "Demo v0.2 · Dane są ładowane z radar_results.csv. "
+        "Przycisk skanu uruchamia main.py na serwerze."
     )
 
-# profit calculation
-if not results_df.empty:
-
-    def calculate_profit(row):
-
-        if row["result"] == "WIN":
-            return row["odds"] - 1
-
-        elif row["result"] == "LOSS":
-            return -1
-
-        return 0
-
-    results_df["profit"] = results_df.apply(
-        calculate_profit,
-        axis=1
-    )
-st.title("🔥 Radar Value 2.0")
-
-if st.button("🔄 Refresh Radar"):
-    with st.spinner("Radar pobiera i analizuje dane..."):
+if refresh_clicked:
+    with st.status("📡 Scanning today's games...", expanded=True) as status:
+        st.write("🏀 Loading players and rotations...")
         result = subprocess.run(
-            [sys.executable, "main.py"],
+            [sys.executable, str(ROOT / "main.py")],
             capture_output=True,
-            text=True
+            text=True,
+            cwd=ROOT,
         )
+        st.write("📈 Calculating Radar Score...")
 
-    if result.returncode == 0:
-        st.success("Radar updated!")
-        st.rerun()
-    else:
-        st.error("Nie udało się odświeżyć Radaru.")
-        st.code(result.stderr)
-df = pd.read_csv("radar_results.csv")
-df = df.sort_values(by="score", ascending=False)
+        if result.returncode == 0:
+            status.update(label="✅ Radar ready", state="complete")
+            st.rerun()
+        else:
+            status.update(label="❌ Radar scan failed", state="error")
+            st.code(result.stderr or result.stdout or "Brak dodatkowych informacji.")
 
-top_pick = df.iloc[0]
-
-elite_df = df[df["elite_play"] == True]
-
-if not elite_df.empty:
-
-    st.subheader("🚨 ELITE PLAYS")
-
-    st.dataframe(
-        elite_df,
-        use_container_width=True
+if radar_df.empty:
+    st.error(
+        "Nie udało się wczytać radar_results.csv. "
+        "Sprawdź, czy plik znajduje się obok app.py."
     )
+    st.stop()
 
-st.subheader("🏆 TOP RADAR PICK")
+required = {"name", "score", "signal"}
+missing = required.difference(radar_df.columns)
+if missing:
+    st.error("W radar_results.csv brakuje kolumn: " + ", ".join(sorted(missing)))
+    st.stop()
 
-col1, col2, col3 = st.columns(3)
+radar_df = radar_df.copy()
+radar_df["score"] = pd.to_numeric(radar_df["score"], errors="coerce").fillna(0)
+radar_df = radar_df.sort_values("score", ascending=False)
+top_pick = radar_df.iloc[0]
 
-with col1:
-    st.metric("Player", top_pick["name"])
+render_section("Daily intelligence", "Top Radar Pick")
+render_top_pick(top_pick)
 
-with col2:
-    st.metric("Radar Score", top_pick["score"])
+render_section("Market overview", "Radar Snapshot")
+render_metrics(radar_df)
 
-with col3:
-    st.metric("Signal", top_pick["signal"])
+render_section("Signal explorer", "Today's Player Cards")
 
-st.divider()
+filter_col1, filter_col2, filter_col3 = st.columns(3)
 
-st.subheader("📈 RADAR STATS")
-
-col1, col2, col3 = st.columns(3)
-
-with col1:
-    st.metric("Average Radar Score", round(df["score"].mean(), 1))
-
-with col2:
-    st.metric(
-        "Strong Over Trends",
-        len(df[df["signal"] == "🔥 STRONG OVER TREND"])
-    )
-
-with col3:
-    st.metric(
-        "Cold Trends",
-        len(df[df["signal"] == "🔻 COLD TREND"])
-    )
-
-st.divider()
-
-strong_over = df[df["signal"] == "🔥 STRONG OVER TREND"]
-over_trend = df[df["signal"] == "⚠️ OVER TREND"]
-cold_trend = df[df["signal"] == "🔻 COLD TREND"]
-
-st.subheader("🔥 STRONG OVER TRENDS")
-st.dataframe(strong_over, use_container_width=True)
-
-st.subheader("⚠️ OVER TRENDS")
-st.dataframe(over_trend, use_container_width=True)
-
-st.subheader("🔻 COLD TRENDS")
-st.dataframe(cold_trend, use_container_width=True)
-
-st.divider()
-
-st.subheader("🎯 RADAR FILTERS")
-
-col1, col2, col3 = st.columns(3)
-
-with col1:
+with filter_col1:
+    signals = list(radar_df["signal"].dropna().unique())
     selected_signals = st.multiselect(
         "Signals",
-        options=df["signal"].unique(),
-        default=df["signal"].unique()
+        options=signals,
+        default=signals,
     )
 
-with col2:
+with filter_col2:
     min_score = st.slider(
         "Minimum Radar Score",
-        0,
-        100,
-        20
+        min_value=0,
+        max_value=100,
+        value=20,
     )
 
-with col3:
+edge_column = "real_edge" if "real_edge" in radar_df.columns else "edge"
+
+with filter_col3:
     min_edge = st.slider(
-        "Minimum Real Edge",
-        -10.0,
-        10.0,
-        0.0
+        "Minimum Edge",
+        min_value=-15.0,
+        max_value=15.0,
+        value=0.0,
+        step=0.5,
     )
 
-filtered_df = df[
-    (df["signal"].isin(selected_signals))
-    & (df["score"] >= min_score)
-    & (df["real_edge"] >= min_edge)
-]
+filtered_df = radar_df[
+    radar_df["signal"].isin(selected_signals)
+    & (radar_df["score"] >= min_score)
+].copy()
 
-st.subheader("📊 DAILY RADAR RESULTS")
-st.dataframe(filtered_df, use_container_width=True)
+if edge_column in filtered_df.columns:
+    filtered_df[edge_column] = pd.to_numeric(
+        filtered_df[edge_column],
+        errors="coerce",
+    ).fillna(0)
+    filtered_df = filtered_df[filtered_df[edge_column] >= min_edge]
 
-st.divider()
+render_player_cards(filtered_df, limit=12)
 
-st.subheader("📜 RADAR HISTORY")
+with st.expander("View complete radar table"):
+    st.dataframe(filtered_df, use_container_width=True, hide_index=True)
 
-if history_df.empty:
-    st.info("Brak historii. Kliknij Refresh Radar albo odpal py main.py.")
-elif "timestamp" not in history_df.columns:
-    st.warning("Historia istnieje, ale nie ma jeszcze kolumny timestamp. Odpal ponownie Refresh Radar.")
-    st.dataframe(history_df, use_container_width=True)
-else:
-    history_sorted = history_df.sort_values(
-        by="timestamp",
-        ascending=False
-    )
-    st.dataframe(history_sorted, use_container_width=True)
+render_section("Performance", "History & Accuracy")
 
-st.divider()
+history_tab, accuracy_tab = st.tabs(["Radar history", "Accuracy tracking"])
 
-st.subheader("📈 RADAR SCORE HISTORY")
-
-if not history_df.empty and "timestamp" in history_df.columns:
-    selected_player = st.selectbox(
-        "Select Player",
-        history_df["name"].unique()
-    )
-
-    player_history = history_df[
-        history_df["name"] == selected_player
-    ].sort_values(by="timestamp")
-
-    st.line_chart(
-        player_history.set_index("timestamp")["score"]
-    )
-else:
-    st.info("Brak danych historycznych do wykresu.")
-
-st.divider()
-
-st.subheader("✅ ACCURACY TRACKING")
-
-if results_df.empty:
-    st.info("Brak pliku results.csv.")
-else:
-    st.dataframe(results_df, use_container_width=True)
-
-    graded = results_df.dropna(subset=["actual_pra"])
-
-    if not graded.empty:
-        total = len(graded)
-        wins = len(graded[graded["result"] == "WIN"])
-        accuracy = wins / total * 100
-
-        profit = graded["profit"].sum()
-        roi = (profit / total) * 100
-
-        col1, col2, col3, col4, col5 = st.columns(5)
-
-        with col1:
-            st.metric("Accuracy", f"{round(accuracy, 1)}%")
-
-        with col2:
-            st.metric("Graded Picks", total)
-
-        with col3:
-            st.metric("Wins", wins)
-
-        with col4:
-            st.metric("Profit (Units)", round(profit, 2))
-
-        with col5:
-            st.metric("ROI %", f"{round(roi,1)}%")
+with history_tab:
+    if history_df.empty:
+        st.info("Brak history.csv. Pojawi się po zapisaniu pierwszych skanów.")
     else:
-        st.info("Dodaj actual_pra po meczach, żeby liczyć skuteczność.")
+        if "timestamp" in history_df.columns:
+            history_df = history_df.sort_values("timestamp", ascending=False)
+        st.dataframe(history_df, use_container_width=True, hide_index=True)
+
+        if {"timestamp", "name", "score"}.issubset(history_df.columns):
+            player = st.selectbox(
+                "Player score history",
+                options=history_df["name"].dropna().unique(),
+            )
+            player_history = history_df[
+                history_df["name"] == player
+            ].sort_values("timestamp")
+            st.line_chart(
+                player_history.set_index("timestamp")["score"],
+                use_container_width=True,
+            )
+
+with accuracy_tab:
+    if results_df.empty:
+        st.info("Brak results.csv. Moduł zacznie działać po zapisaniu typów.")
+    else:
+        st.dataframe(results_df, use_container_width=True, hide_index=True)
+
+        if "actual_pra" in results_df.columns:
+            graded = results_df.dropna(subset=["actual_pra"])
+        else:
+            graded = pd.DataFrame()
+
+        if not graded.empty and "result" in graded.columns:
+            total = len(graded)
+            wins = int((graded["result"] == "WIN").sum())
+            accuracy = wins / total * 100
+            profit = graded["profit"].sum() if "profit" in graded.columns else 0
+            roi = profit / total * 100
+
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("Accuracy", f"{accuracy:.1f}%")
+            c2.metric("Graded picks", total)
+            c3.metric("Profit", f"{profit:.2f} u")
+            c4.metric("ROI", f"{roi:.1f}%")
+        else:
+            st.info("Dodaj actual_pra po meczach, aby liczyć skuteczność.")
