@@ -1,0 +1,17 @@
+﻿timestamp,name,score,signal,pra5,pra10,minutes_trend,edge,book_line,real_edge,covers,matchup_boost,injury_boost,injury_reason,elite_play,team_boost
+2026-05-16 14:27,Donovan Mitchell,62.5,🔥 STRONG OVER TREND,38.4,33.4,1.2,5.0,35.5,2.9,3,2.0,0,,False,0
+2026-05-16 14:27,Jarrett Allen,45.2,🔥 STRONG OVER TREND,23.8,22.1,2.4,1.7,21.5,2.3,4,0.0,0,,False,0
+2026-05-16 14:27,Paul Reed,41.6,⚠️ OVER TREND,15.6,14.5,0.8,1.1,10.5,5.1,4,0.0,0,,False,0
+2026-05-16 14:27,James Harden,39.3,⚠️ OVER TREND,32.0,32.4,0.1,-0.4,31.5,0.5,3,0.0,0,,False,0
+2026-05-16 14:27,Cade Cunningham,37.7,⚠️ OVER TREND,39.8,41.6,0.4,-1.8,41.5,-1.7,2,0.0,0,,False,0
+2026-05-16 14:27,Duncan Robinson,33.9,➖ NEUTRAL,18.0,16.8,-0.4,1.2,15.5,2.5,4,0.0,0,,False,0
+2026-05-16 14:27,Evan Mobley,28.1,➖ NEUTRAL,26.0,27.8,2.2,-1.8,27.5,-1.5,2,0.0,0,,False,0
+2026-05-16 14:27,Tobias Harris,23.0,➖ NEUTRAL,23.8,27.9,-0.3,-4.1,24.5,-0.7,3,0.0,0,,False,0
+2026-05-16 14:27,Caris LeVert,16.2,➖ NEUTRAL,14.6,9.5,4.6,5.1,19.5,-4.9,1,0.0,0,,False,0
+2026-05-16 14:27,Ausar Thompson,14.2,🔻 COLD TREND,18.0,19.3,-3.5,-1.3,18.5,-0.5,3,0.0,0,,False,0
+2026-05-16 14:27,Max Strus,12.3,🔻 COLD TREND,15.0,16.2,2.0,-1.2,17.5,-2.5,1,0.0,0,,False,0
+2026-05-16 14:27,Jalen Duren,5.6,🔻 COLD TREND,18.2,21.5,-2.2,-3.3,20.5,-2.3,1,0.0,0,,False,0
+2026-05-16 14:27,Sam Merrill,0.9,🔻 COLD TREND,7.2,9.0,-2.3,-1.8,8.5,-1.3,2,0.0,0,,False,0
+2026-05-16 14:27,Dean Wade,-2.2,🔻 COLD TREND,6.8,9.1,-1.8,-2.3,8.5,-1.7,1,0.0,0,,False,0
+2026-05-16 14:27,Marcus Sasser,-17.0,🔻 COLD TREND,4.6,4.7,-0.4,-0.1,11.5,-6.9,0,0.0,0,,False,0
+2026-05-16 14:27,Dennis Schröder,-19.6,🔻 COLD TREND,10.0,10.9,1.4,-0.9,20.5,-10.5,0,0.0,0,,False,0
