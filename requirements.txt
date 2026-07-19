@@ -1,4 +1,2 @@
-streamlit>=1.42,<2
-pandas>=2.2,<3
-nba_api>=1.9,<2
-requests>=2.31,<3
+streamlit>=1.41
+pandas>=2.2

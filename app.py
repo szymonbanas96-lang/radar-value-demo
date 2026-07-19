@@ -1,379 +1,206 @@
-from pathlib import Path
-import subprocess
-import sys
 
 import pandas as pd
 import streamlit as st
-
-ROOT = Path(__file__).resolve().parent
-ASSETS = ROOT / "assets"
+from pathlib import Path
 
 st.set_page_config(
-    page_title="Radar Value",
-    page_icon=str(ASSETS / "favicon.png"),
+    page_title="Radar Value — Historical Replay",
+    page_icon="📡",
     layout="wide",
-    initial_sidebar_state="collapsed",
 )
 
-# ---------- Styling ----------
-css_path = ASSETS / "style.css"
-if css_path.exists():
-    st.markdown(css_path.read_text(encoding="utf-8"), unsafe_allow_html=True)
+DATA_PATH = Path(__file__).parent / "data" / "game7_demo.csv"
 
-# ---------- Helpers ----------
-def read_csv_safe(filename: str) -> pd.DataFrame:
-    path = ROOT / filename
-    if not path.exists():
-        return pd.DataFrame()
-    try:
-        return pd.read_csv(path)
-    except Exception as exc:
-        st.warning(f"Nie udało się wczytać {filename}: {exc}")
-        return pd.DataFrame()
+st.markdown("""
+<style>
+:root {
+    --rv-green: #7CFF72;
+    --rv-orange: #FF9F43;
+    --rv-red: #FF5D73;
+    --rv-bg: #070A0F;
+    --rv-card: #101722;
+    --rv-muted: #91A0B5;
+}
+.stApp { background: radial-gradient(circle at 15% 0%, #13241b 0%, #070A0F 28%, #070A0F 100%); }
+.block-container { max-width: 1400px; padding-top: 1.4rem; }
+h1, h2, h3 { letter-spacing: -0.03em; }
+.rv-kicker { color: var(--rv-green); font-weight: 800; letter-spacing: .16em; font-size: .78rem; }
+.rv-muted { color: var(--rv-muted); }
+.rv-card {
+    background: linear-gradient(145deg, rgba(18,27,40,.98), rgba(10,15,23,.98));
+    border: 1px solid rgba(124,255,114,.14);
+    border-radius: 22px;
+    padding: 22px;
+    box-shadow: 0 18px 45px rgba(0,0,0,.28);
+}
+.rv-score {
+    font-size: 4.8rem;
+    line-height: .95;
+    font-weight: 900;
+    color: var(--rv-green);
+}
+.rv-pill {
+    display: inline-block;
+    padding: 6px 11px;
+    border-radius: 999px;
+    background: rgba(124,255,114,.1);
+    color: var(--rv-green);
+    font-weight: 800;
+    font-size: .78rem;
+}
+.rv-hit { color: var(--rv-green); font-weight: 900; }
+.rv-miss { color: var(--rv-red); font-weight: 900; }
+div[data-testid="stMetric"] {
+    background: rgba(16,23,34,.85);
+    border: 1px solid rgba(255,255,255,.07);
+    padding: 14px 16px;
+    border-radius: 16px;
+}
+</style>
+""", unsafe_allow_html=True)
 
+@st.cache_data
+def load_data():
+    return pd.read_csv(DATA_PATH)
 
-def num(value, default: float = 0.0) -> float:
-    try:
-        if pd.isna(value):
-            return default
-        return float(value)
-    except (TypeError, ValueError):
-        return default
+def clamp(v, lo=0, hi=100):
+    return max(lo, min(hi, v))
 
-
-def col_name(df: pd.DataFrame, preferred: str, fallback: str | None = None):
-    if preferred in df.columns:
-        return preferred
-    if fallback and fallback in df.columns:
-        return fallback
-    return None
-
-
-def grade_results(df: pd.DataFrame) -> pd.DataFrame:
-    required = {"actual_pra", "prediction", "book_line"}
-    if df.empty or not required.issubset(df.columns):
-        return df
-
-    out = df.copy()
-
-    def outcome(row):
-        if pd.isna(row["actual_pra"]):
-            return ""
-        actual = num(row["actual_pra"])
-        line = num(row["book_line"])
-        prediction = str(row["prediction"]).upper()
-        if prediction == "OVER":
-            return "WIN" if actual > line else "LOSS"
-        if prediction == "UNDER":
-            return "WIN" if actual < line else "LOSS"
-        return ""
-
-    out["result"] = out.apply(outcome, axis=1)
-
-    def profit(row):
-        if row["result"] == "WIN":
-            return num(row.get("odds", 1.90), 1.90) - 1
-        if row["result"] == "LOSS":
-            return -1.0
-        return 0.0
-
-    out["profit"] = out.apply(profit, axis=1)
-    return out
-
-
-def section(eyebrow: str, title: str, subtitle: str | None = None):
-    st.markdown(
-        f'<div class="rv-eyebrow">{eyebrow}</div>',
-        unsafe_allow_html=True,
-    )
-    st.subheader(title)
-    if subtitle:
-        st.markdown(
-            f'<div class="rv-subtitle">{subtitle}</div>',
-            unsafe_allow_html=True,
-        )
-
-
-def player_card(row: pd.Series):
-    name = str(row.get("name", "Unknown player"))
-    score = num(row.get("score"))
-    signal = str(row.get("signal", "—"))
-    edge = num(row.get("real_edge", row.get("edge", 0)))
-    line = num(row.get("book_line", 0))
-    pra5 = num(row.get("pra5", 0))
-    minutes = num(row.get("minutes_trend", 0))
-
-    left, right = st.columns([4, 1])
-    with left:
-        st.markdown(
-            f"""
-<div class="rv-player-name">{name}</div>
-<div class="rv-player-signal">{signal}</div>
-<div class="rv-player-meta">
-Edge {edge:+.1f} · Line {line:.1f} · PRA5 {pra5:.1f} · Minutes {minutes:+.1f}
-</div>
-""",
-            unsafe_allow_html=True,
-        )
-    with right:
-        st.markdown(
-            f'<div class="rv-score">{score:.1f}</div>',
-            unsafe_allow_html=True,
-        )
-
-
-# ---------- Data ----------
-radar_df = read_csv_safe("radar_results.csv")
-history_df = read_csv_safe("history.csv")
-results_df = grade_results(read_csv_safe("results.csv"))
-
-# ---------- Header ----------
-logo_col, status_col = st.columns([5, 1])
-
-with logo_col:
-    if (ASSETS / "logo_horizontal.png").exists():
-        st.image(str(ASSETS / "logo_horizontal.png"), width=360)
-    else:
-        st.title("📡 RADAR VALUE")
-    st.caption("NBA market intelligence platform")
-
-with status_col:
-    st.markdown(
-        '<div class="rv-pill">● ALPHA v0.3</div>',
-        unsafe_allow_html=True,
+def calculate_projection(row):
+    return (
+        row["avg5"] * 0.34
+        + row["avg10"] * 0.20
+        + row["series_avg"] * 0.28
+        + row["line"] * 0.18
+        + row["minutes_trend"] * 0.35
+        + row["usage_trend"] * 0.25
     )
 
-refresh_col, note_col = st.columns([1.2, 4.8])
-with refresh_col:
-    refresh = st.button("📡 Scan Radar")
-with note_col:
-    st.caption(
-        "Demo korzysta z radar_results.csv. Skan uruchamia aktualny main.py."
+def calculate_radar_score(row, projection):
+    edge = projection - row["line"]
+    edge_component = clamp(50 + edge * 6)
+    trend_component = clamp(50 + row["minutes_trend"] * 7 + row["usage_trend"] * 5)
+    hit_component = row["hit_rate_5"] * 100
+    context_component = ((row["matchup_score"] + row["role_score"] + row["market_lag"]) / 30) * 100
+
+    score = (
+        edge_component * 0.34
+        + trend_component * 0.20
+        + hit_component * 0.16
+        + context_component * 0.30
     )
+    return round(clamp(score), 1)
 
-if refresh:
-    with st.status("📡 Scanning today's games...", expanded=True) as status:
-        st.write("🏀 Loading players and rotations...")
-        run = subprocess.run(
-            [sys.executable, str(ROOT / "main.py")],
-            cwd=ROOT,
-            capture_output=True,
-            text=True,
-        )
-        st.write("📈 Calculating Radar Score...")
-        if run.returncode == 0:
-            status.update(label="✅ Radar ready", state="complete")
-            st.rerun()
-        else:
-            status.update(label="❌ Radar scan failed", state="error")
-            st.code(run.stderr or run.stdout or "Brak szczegółów błędu.")
-
-if radar_df.empty:
-    st.error("Brak danych w radar_results.csv.")
-    st.stop()
-
-required = {"name", "score", "signal"}
-missing = required.difference(radar_df.columns)
-if missing:
-    st.error("Brakuje kolumn: " + ", ".join(sorted(missing)))
-    st.stop()
-
-radar_df = radar_df.copy()
-radar_df["score"] = pd.to_numeric(radar_df["score"], errors="coerce").fillna(0)
-radar_df = radar_df.sort_values("score", ascending=False)
-top = radar_df.iloc[0]
-
-edge_col = col_name(radar_df, "real_edge", "edge")
-elite_count = (
-    int(radar_df["elite_play"].fillna(False).astype(bool).sum())
-    if "elite_play" in radar_df.columns
-    else 0
+df = load_data()
+df["projection"] = df.apply(calculate_projection, axis=1)
+df["edge"] = df["projection"] - df["line"]
+df["radar_score"] = df.apply(lambda r: calculate_radar_score(r, r["projection"]), axis=1)
+df["pick"] = df["edge"].apply(lambda x: "OVER" if x >= 0 else "UNDER")
+df["result"] = df.apply(
+    lambda r: "HIT" if ((r["pick"] == "OVER" and r["actual"] > r["line"]) or
+                        (r["pick"] == "UNDER" and r["actual"] < r["line"])) else "MISS",
+    axis=1,
 )
-strong_count = int(
-    (radar_df["signal"] == "🔥 STRONG OVER TREND").sum()
+df = df.sort_values("radar_score", ascending=False).reset_index(drop=True)
+top = df.iloc[0]
+
+st.markdown('<div class="rv-kicker">RADAR VALUE · HISTORICAL REPLAY</div>', unsafe_allow_html=True)
+st.title("Spurs @ Thunder — Game 7")
+st.caption("Western Conference Finals · 30 maja 2026 · widok symulowany tak, jak przed rozpoczęciem meczu")
+
+left, right = st.columns([1.35, .65], gap="large")
+
+with left:
+    st.markdown(f"""
+    <div class="rv-card">
+        <div class="rv-pill">TOP RADAR PICK</div>
+        <h2 style="margin:14px 0 4px">{top['player']}</h2>
+        <div class="rv-muted">{top['market']} · linia {top['line']:.1f}</div>
+        <div style="display:flex;align-items:end;gap:26px;margin-top:22px">
+            <div>
+                <div class="rv-score">{top['radar_score']:.0f}</div>
+                <div class="rv-muted">RADAR SCORE</div>
+            </div>
+            <div style="padding-bottom:8px">
+                <div style="font-size:1.35rem;font-weight:900">{top['pick']}</div>
+                <div class="rv-muted">projekcja {top['projection']:.1f} · edge {top['edge']:+.1f}</div>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+with right:
+    st.markdown("""
+    <div class="rv-card">
+        <div class="rv-kicker">GAME CONTEXT</div>
+        <h3 style="margin-bottom:8px">Winner takes the West</h3>
+        <div class="rv-muted">Seria 3–3 · mecz w Oklahoma City</div>
+        <hr style="border-color:rgba(255,255,255,.08)">
+        <b>Tryb:</b> pre-game snapshot<br>
+        <b>Rynek:</b> punkty zawodników<br>
+        <b>Walidacja:</b> wynik odkrywany niżej
+    </div>
+    """, unsafe_allow_html=True)
+
+st.subheader("Radar board")
+show_cols = ["player","team","line","projection","edge","radar_score","pick"]
+board = df[show_cols].copy()
+board.columns = ["Player","Team","Line","Projection","Edge","Radar Score","Signal"]
+st.dataframe(
+    board.style.format({
+        "Line":"{:.1f}",
+        "Projection":"{:.1f}",
+        "Edge":"{:+.1f}",
+        "Radar Score":"{:.1f}"
+    }).background_gradient(subset=["Radar Score"]),
+    use_container_width=True,
+    hide_index=True
 )
-cold_count = int(
-    (radar_df["signal"] == "🔻 COLD TREND").sum()
-)
 
-# ---------- Top pick ----------
-section(
-    "Daily intelligence",
-    "Top Radar Pick",
-    "Najmocniejszy aktualny sygnał według modelu.",
-)
-
-st.markdown('<div class="rv-top-shell">', unsafe_allow_html=True)
-with st.container(border=True):
-    name_col, score_col = st.columns([3.7, 1.3])
-
-    with name_col:
-        st.caption("TODAY'S BEST VALUE")
-        st.title(str(top["name"]))
-        st.markdown(f"**{top['signal']}**")
-
-    with score_col:
-        st.metric(
-            "Radar Score",
-            f"{num(top['score']):.1f}",
-            "out of 100",
-        )
-
-    edge = num(top.get(edge_col, 0)) if edge_col else 0
-    line = num(top.get("book_line", 0))
-    pra5 = num(top.get("pra5", 0))
-    minutes = num(top.get("minutes_trend", 0))
-
-    a, b, c, d = st.columns(4)
-    a.metric("Real Edge", f"{edge:+.1f}")
-    b.metric("Book Line", f"{line:.1f}")
-    c.metric("PRA Last 5", f"{pra5:.1f}")
-    d.metric("Minutes Trend", f"{minutes:+.1f}")
-st.markdown("</div>", unsafe_allow_html=True)
-
-# ---------- Snapshot ----------
-section("Market overview", "Radar Snapshot")
+st.subheader("Dlaczego model tak ocenił zawodników?")
+selected_player = st.selectbox("Wybierz zawodnika", df["player"].tolist())
+p = df[df["player"] == selected_player].iloc[0]
 
 m1, m2, m3, m4 = st.columns(4)
-m1.metric("Average Score", f"{radar_df['score'].mean():.1f}")
-m2.metric("Elite Plays", elite_count)
-m3.metric("Strong Overs", strong_count)
-m4.metric("Cold Trends", cold_count)
+m1.metric("Średnia L5", f"{p['avg5']:.1f}")
+m2.metric("Średnia L10", f"{p['avg10']:.1f}")
+m3.metric("Średnia w serii", f"{p['series_avg']:.1f}")
+m4.metric("Minuty", f"{p['minutes_avg']:.1f}", f"{p['minutes_trend']:+.1f}")
 
-# ---------- Filters ----------
-section(
-    "Signal explorer",
-    "Today's Player Radar",
-    "Filtruj sygnały i zawęź listę do najlepszych okazji.",
-)
+c1, c2, c3 = st.columns(3)
+c1.metric("Role score", f"{p['role_score']:.1f}/10")
+c2.metric("Matchup score", f"{p['matchup_score']:.1f}/10")
+c3.metric("Market lag", f"{p['market_lag']:.1f}/10")
 
-f1, f2, f3 = st.columns(3)
-signals = list(radar_df["signal"].dropna().unique())
+chart_data = pd.DataFrame({
+    "Metric": ["Book line", "L5", "L10", "Series", "Projection"],
+    "Value": [p["line"], p["avg5"], p["avg10"], p["series_avg"], p["projection"]]
+}).set_index("Metric")
+st.bar_chart(chart_data)
 
-with f1:
-    selected_signals = st.multiselect(
-        "Signals",
-        options=signals,
-        default=signals,
-    )
+st.divider()
+st.subheader("Post-game validation")
+reveal = st.toggle("Odkryj wynik Game 7")
 
-with f2:
-    min_score = st.slider(
-        "Minimum Radar Score",
-        min_value=0,
-        max_value=100,
-        value=20,
-    )
-
-with f3:
-    min_edge = st.slider(
-        "Minimum Edge",
-        min_value=-15.0,
-        max_value=15.0,
-        value=0.0,
-        step=0.5,
-    )
-
-filtered = radar_df[
-    radar_df["signal"].isin(selected_signals)
-    & (radar_df["score"] >= min_score)
-].copy()
-
-if edge_col:
-    filtered[edge_col] = pd.to_numeric(
-        filtered[edge_col], errors="coerce"
-    ).fillna(0)
-    filtered = filtered[filtered[edge_col] >= min_edge]
-
-# Native Streamlit card grid.
-if filtered.empty:
-    st.info("Brak zawodników spełniających filtry.")
-else:
-    rows = filtered.head(12).reset_index(drop=True)
-    for start in range(0, len(rows), 3):
-        cols = st.columns(3)
-        chunk = rows.iloc[start:start + 3]
-        for col, (_, row) in zip(cols, chunk.iterrows()):
-            with col:
-                with st.container(border=True):
-                    player_card(row)
-                    st.progress(
-                        max(0, min(100, int(num(row.get("score"))))),
-                        text="Model strength",
-                    )
-
-with st.expander("View complete radar table"):
+if reveal:
+    hits = int((df["result"] == "HIT").sum())
+    total = len(df)
+    st.metric("Skuteczność demo", f"{hits}/{total}", f"{hits/total:.0%}")
+    result_view = df[["player","line","projection","pick","actual","result"]].copy()
+    result_view.columns = ["Player","Line","Projection","Pick","Actual points","Result"]
     st.dataframe(
-        filtered,
+        result_view.style.format({"Line":"{:.1f}","Projection":"{:.1f}"}),
         use_container_width=True,
-        hide_index=True,
+        hide_index=True
     )
+    st.caption("To pojedynczy mecz i nie jest dowodem przewagi modelu. To prototyp ekranu oraz mechanizmu backtestu.")
+else:
+    st.info("Wyniki są ukryte, aby dashboard zachowywał się jak analiza przedmeczowa.")
 
-# ---------- History ----------
-section("Performance", "History & Accuracy")
-
-history_tab, accuracy_tab = st.tabs(
-    ["Radar history", "Accuracy tracking"]
-)
-
-with history_tab:
-    if history_df.empty:
-        st.info("Brak history.csv. Historia pojawi się po zapisaniu skanów.")
-    else:
-        if "timestamp" in history_df.columns:
-            history_df = history_df.sort_values(
-                "timestamp", ascending=False
-            )
-        st.dataframe(
-            history_df,
-            use_container_width=True,
-            hide_index=True,
-        )
-
-        if {"timestamp", "name", "score"}.issubset(history_df.columns):
-            player = st.selectbox(
-                "Player score history",
-                options=history_df["name"].dropna().unique(),
-            )
-            ph = history_df[
-                history_df["name"] == player
-            ].sort_values("timestamp")
-            st.line_chart(
-                ph.set_index("timestamp")["score"],
-                use_container_width=True,
-            )
-
-with accuracy_tab:
-    if results_df.empty:
-        st.info("Brak results.csv. Moduł ruszy po zapisaniu typów.")
-    else:
-        st.dataframe(
-            results_df,
-            use_container_width=True,
-            hide_index=True,
-        )
-
-        graded = (
-            results_df.dropna(subset=["actual_pra"])
-            if "actual_pra" in results_df.columns
-            else pd.DataFrame()
-        )
-
-        if not graded.empty and "result" in graded.columns:
-            total = len(graded)
-            wins = int((graded["result"] == "WIN").sum())
-            accuracy = wins / total * 100
-            profit = (
-                graded["profit"].sum()
-                if "profit" in graded.columns
-                else 0
-            )
-            roi = profit / total * 100
-
-            g1, g2, g3, g4 = st.columns(4)
-            g1.metric("Accuracy", f"{accuracy:.1f}%")
-            g2.metric("Graded Picks", total)
-            g3.metric("Profit", f"{profit:.2f} u")
-            g4.metric("ROI", f"{roi:.1f}%")
-        else:
-            st.info("Dodaj actual_pra, aby policzyć skuteczność.")
+with st.expander("Założenia wersji beta"):
+    st.markdown("""
+- Dane wejściowe L5/L10, trendy i oceny kontekstowe są zestawem demonstracyjnym do budowy interfejsu.
+- Linie w pliku CSV są edytowalne. Przed uznaniem ich za archiwalne należy potwierdzić je w wiarygodnym źródle kursów.
+- Wyniki Game 7 użyte do walidacji: SGA 35, Wembanyama 22, Castle 16, Fox 15.
+- Docelowo dane demonstracyjne zastąpimy snapshotem z API oraz archiwum linii bukmacherskich.
+""")

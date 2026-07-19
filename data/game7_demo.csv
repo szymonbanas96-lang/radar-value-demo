@@ -1,0 +1,5 @@
+player,team,market,line,avg5,avg10,series_avg,minutes_avg,minutes_trend,hit_rate_5,usage_trend,matchup_score,role_score,market_lag,actual
+Shai Gilgeous-Alexander,OKC,Points,30.5,33.2,31.6,32.4,39.1,1.8,0.6,2.6,7.8,9.4,7.2,35
+Victor Wembanyama,SAS,Points,26.5,28.4,27.8,27.1,37.8,1.1,0.6,1.9,7.4,9.1,6.8,22
+Stephon Castle,SAS,Points,16.5,18.2,17.1,16.8,36.4,2.2,0.6,2.8,7.0,8.3,7.5,16
+De'Aaron Fox,SAS,Points,13.5,15.8,15.1,14.7,34.2,0.7,0.6,0.8,6.6,7.7,6.2,15
