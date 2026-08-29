@@ -164,7 +164,7 @@ except Exception:
     pass
 
 home_tab, scanner_tab, line_tab, points_tab, system_tab = st.tabs(
-    ["🏠 Home", "📡 Market Scanner", "🎚️ Line Lab", "⚙️ System"]
+    ["🏠 Home", "📡 Market Scanner", "🧪 Line Lab", "🏀 Points Radar", "⚙️ System"]
 )
 
 with home_tab:
