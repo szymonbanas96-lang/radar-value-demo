@@ -2,6 +2,7 @@ import os
 from typing import List, Optional, Dict, Any
 import requests
 import pandas as pd
+import time
 
 BASE_URL = "https://api.sportsgameodds.com/v2/events"
 
@@ -48,10 +49,28 @@ def fetch_historical_nba_points(
         if cursor:
             p["cursor"] = cursor
 
-        r = requests.get(BASE_URL, params=p, timeout=30)
-        r.raise_for_status()
+        max_retries = 8
+        for attempt in range(max_retries):
+            r = requests.get(BASE_URL, params=p, timeout=30)
+
+            if r.status_code == 429:
+                retry_after = r.headers.get("Retry-After")
+                try:
+                    wait = float(retry_after) if retry_after else min(60, 5 * (attempt + 1))
+                except Exception:
+                    wait = min(60, 5 * (attempt + 1))
+                print(f"Rate limit 429 — waiting {wait:.0f}s before retry {attempt+1}/{max_retries}...")
+                time.sleep(wait)
+                continue
+
+            r.raise_for_status()
+            break
+        else:
+            raise RuntimeError("SportsGameOdds rate limit persisted after retries.")
+
         payload = r.json()
         events = payload.get("data") or []
+        print(f"Historical odds page: {len(events)} events")
 
         for event in events:
             event_id = event.get("eventID")

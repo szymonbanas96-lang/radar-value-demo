@@ -76,3 +76,15 @@ does a larger projection-vs-book line gap correspond to a higher hit rate?
 This package grades a simple OVER when projection > line and UNDER when
 projection < line. It does not yet calculate ROI from American/decimal prices.
 That should be the next layer after we confirm a useful win-rate/edge relationship.
+
+
+## RATE LIMIT FIX
+
+This version handles SportsGameOdds HTTP 429 automatically:
+- waits and retries with backoff,
+- respects `Retry-After` when provided,
+- prints page progress,
+- caches Points Radar projections in `points_projections_<season>.csv`.
+
+This means if the odds API rate-limits again, you do not need to recalculate all
+30 players on the next run.

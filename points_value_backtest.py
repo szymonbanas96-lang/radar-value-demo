@@ -97,8 +97,16 @@ def main():
     print("Downloading historical team context...")
     prepared = add_opponent_rows(fetch_league_team_games(args.season))
 
-    print("Building leak-safe Points Radar v2.1 projections...")
-    projections = build_projections(args.season, prepared)
+    cache_file = Path(f"points_projections_{args.season}.csv")
+    if cache_file.exists():
+        print(f"Loading cached Points Radar projections from {cache_file}...")
+        projections = pd.read_csv(cache_file)
+    else:
+        print("Building leak-safe Points Radar v2.1 projections...")
+        projections = build_projections(args.season, prepared)
+        projections.to_csv(cache_file, index=False, encoding="utf-8-sig")
+        print(f"Saved projection cache: {cache_file}")
+
     projections["name_key"] = projections.player.map(normalize_name)
 
     print("Downloading historical sportsbook POINTS lines...")
