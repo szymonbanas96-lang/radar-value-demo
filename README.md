@@ -1,48 +1,78 @@
-# Radar Value v0.8.1 — Live Rosters + Points Radar v1
+# Radar Value — Stage 2: Historical Points Value Backtest
 
-This version merges the v0.8 app with the first historical Points Radar model.
+This package connects the current champion projection model (Points Radar v2.1)
+to historical sportsbook POINTS lines.
 
-## Included
-- preseason schedule
-- Radar Value logo
-- Top 3 Value — Today
-- Top Value per game
-- automatic team rosters
-- injury / availability badges
-- automatic refresh every 10 minutes
-- manual live-data refresh
-- Market Scanner
-- Line Lab
-- Points Radar v1
-- leak-safe historical backtest
-- unified `requirements.txt`
+## Important provider limitation
 
-## New Points Radar files
-- `points_radar.py`
-- `nba_data_service.py`
-- `backtest_points.py`
+SportsGameOdds documents historical opening/closing odds on the Pro plan and
+above. Historical availability can vary by plan, date, market, and bookmaker.
 
-## Historical test
+The script requests:
+- finalized NBA events
+- `includeOpenCloseOdds=true`
+- full-game player POINTS over/under
+- opening and closing line per bookmaker
 
-Install dependencies:
+## API key
+
+PowerShell:
+
+```powershell
+$env:SPORTSGAMEODDS_API_KEY="YOUR_KEY"
+```
+
+## Run
+
+Example:
 
 ```powershell
 pip install -r requirements.txt
+
+python points_value_backtest.py `
+  --season "2025-26" `
+  --starts-after "2025-10-20T00:00:00Z" `
+  --starts-before "2026-04-20T00:00:00Z" `
+  --line-type close
 ```
 
-Run:
+Optional single book:
 
 ```powershell
-python backtest_points.py --player "Jalen Brunson" --season "2025-26"
+python points_value_backtest.py `
+  --season "2025-26" `
+  --starts-after "2025-10-20T00:00:00Z" `
+  --starts-before "2026-04-20T00:00:00Z" `
+  --bookmaker draftkings `
+  --line-type close
 ```
 
-The script saves `points_backtest.csv` and reports:
-- MAE
-- RMSE
-- bias
-- percentage within ±3 points
-- percentage within ±5 points
+## What matters
 
-## Important
-Do not judge betting value yet. v1 validates projection quality first.
-Historical sportsbook lines will be connected after the baseline model is tested.
+The script reports win rate by absolute projection edge:
+
+- 0–1
+- 1–2
+- 2–3
+- 3–4
+- 4+
+
+and thresholds:
+
+- Edge >= 1
+- >= 1.5
+- >= 2
+- >= 2.5
+- >= 3
+- >= 3.5
+- >= 4
+- >= 5
+
+This is the first backtest that directly tests the Radar Value hypothesis:
+does a larger projection-vs-book line gap correspond to a higher hit rate?
+
+## Note
+
+This package grades a simple OVER when projection > line and UNDER when
+projection < line. It does not yet calculate ROI from American/decimal prices.
+That should be the next layer after we confirm a useful win-rate/edge relationship.
