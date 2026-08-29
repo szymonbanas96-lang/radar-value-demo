@@ -1,15 +1,63 @@
-# Radar Value v0.8 — Live Rosters & Availability
+# Radar Value — Odds Fetcher v0.1
 
-New in v0.8:
-- live team rosters under each matchup
-- player availability badges: OUT / DOUBTFUL / QUESTIONABLE / PROBABLE / DAY-TO-DAY / AVAILABLE
-- automatic refresh every 10 minutes
-- manual "Refresh live data" button
-- 10-minute Streamlit cache to avoid hammering external feeds
-- roster feed failure is handled safely: the app keeps running and shows a placeholder
-- v0.7 layout, Top 3 Value, Top Value per game, logo, Market Scanner and Line Lab retained
+This module pulls current NBA player-prop lines for:
 
-Important:
-- Availability depends on what the live source currently publishes.
-- Official NBA injury reporting is updated throughout game day; later Radar versions can use status changes as model inputs.
-- v0.8 displays the statuses. It does not yet recalculate teammate minutes/usage after an OUT — that is the next model layer.
+- Points (PTS)
+- Assists (AST)
+- Rebounds (REB)
+
+Provider: SportsGameOdds.
+
+It stores every bookmaker line separately and also creates a median market
+consensus line for each player/market/game.
+
+## 1. Get API key
+
+Create an API key at SportsGameOdds. The free Amateur tier is enough to test
+the integration.
+
+Do not paste the key directly into `odds_service.py`.
+
+## 2. Windows PowerShell
+
+For the current PowerShell window:
+
+```powershell
+$env:SPORTSGAMEODDS_API_KEY="YOUR_KEY"
+python test_odds.py
+```
+
+Or to run the full exporter:
+
+```powershell
+python odds_service.py
+```
+
+It creates:
+
+- `nba_props_raw.csv`
+- `nba_props_consensus.csv`
+
+## 3. Later Streamlit integration
+
+Import:
+
+```python
+from odds_service import fetch_nba_player_props, build_consensus_lines
+```
+
+Then:
+
+```python
+props = fetch_nba_player_props()
+consensus = build_consensus_lines(props)
+```
+
+The next Radar Value step is to merge `consensus_line` with the model's own
+PTS / AST / REB projection and calculate:
+
+`edge = radar_projection - consensus_line`
+
+Important: these are sportsbook market lines, not NBA league-issued lines.
+The NBA does not publish an "official betting line"; the API aggregates
+sportsbook prices.
