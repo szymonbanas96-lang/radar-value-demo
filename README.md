@@ -1,63 +1,66 @@
-# Radar Value — Odds Fetcher v0.1
+# Radar Value — Points Radar v1
 
-This module pulls current NBA player-prop lines for:
+First isolated model for Radar Value.
 
-- Points (PTS)
-- Assists (AST)
-- Rebounds (REB)
+## What v1 uses
+- PTS last 5
+- PTS last 10
+- minutes trend
+- FGA trend
+- FTA trend
+- 3PA stored for diagnostics
+- home/away split
+- rest days
+- optional opponent defensive factor
 
-Provider: SportsGameOdds.
+The first backtest deliberately leaves opponent factor neutral. We first need
+to measure whether the basic player-form/role model works before adding more
+variables.
 
-It stores every bookmaker line separately and also creates a median market
-consensus line for each player/market/game.
+## Anti-leak rule
 
-## 1. Get API key
+For a historical game on date X, the model receives only rows dated before X.
+The actual result of X is revealed only after the projection is produced.
 
-Create an API key at SportsGameOdds. The free Amateur tier is enough to test
-the integration.
+This is the most important rule in the project.
 
-Do not paste the key directly into `odds_service.py`.
+## Run first test
 
-## 2. Windows PowerShell
-
-For the current PowerShell window:
+Install:
 
 ```powershell
-$env:SPORTSGAMEODDS_API_KEY="YOUR_KEY"
-python test_odds.py
+pip install -r requirements.txt
 ```
 
-Or to run the full exporter:
+Example:
 
 ```powershell
-python odds_service.py
+python backtest_points.py --player "Jalen Brunson" --season "2025-26"
 ```
 
-It creates:
+Output:
+- MAE
+- RMSE
+- bias
+- % predictions within 3 points
+- % predictions within 5 points
+- `points_backtest.csv` with every historical projection
 
-- `nba_props_raw.csv`
-- `nba_props_consensus.csv`
+You can also test a local NBA-style player game-log CSV:
 
-## 3. Later Streamlit integration
-
-Import:
-
-```python
-from odds_service import fetch_nba_player_props, build_consensus_lines
+```powershell
+python backtest_points.py --player "Jalen Brunson" --csv brunson.csv
 ```
 
-Then:
+Required CSV columns:
+`GAME_DATE, PTS, MIN, FGA, FTA, FG3A, MATCHUP`
 
-```python
-props = fetch_nba_player_props()
-consensus = build_consensus_lines(props)
-```
+## Next iteration after results
 
-The next Radar Value step is to merge `consensus_line` with the model's own
-PTS / AST / REB projection and calculate:
-
-`edge = radar_projection - consensus_line`
-
-Important: these are sportsbook market lines, not NBA league-issued lines.
-The NBA does not publish an "official betting line"; the API aggregates
-sportsbook prices.
+Do NOT add every feature immediately. Run v1 first. Then we compare misses and
+add one layer at a time:
+1. opponent defense / pace
+2. starter & role changes
+3. teammate OUT impact
+4. usage
+5. historical sportsbook line / Radar Value
