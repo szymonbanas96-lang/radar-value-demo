@@ -8,6 +8,7 @@ import streamlit as st
 
 from schedule_service import get_preseason_schedule
 from injury_service import get_team_roster
+from points_radar import PointsRadarV1
 
 st.set_page_config(
     page_title="Radar Value — Preseason 2026",
@@ -162,7 +163,7 @@ try:
 except Exception:
     pass
 
-home_tab, scanner_tab, line_tab, system_tab = st.tabs(
+home_tab, scanner_tab, line_tab, points_tab, system_tab = st.tabs(
     ["🏠 Home", "📡 Market Scanner", "🎚️ Line Lab", "⚙️ System"]
 )
 
@@ -281,6 +282,43 @@ with line_tab:
     with c2: st.metric("Edge", f"{edge:+.1f}")
     with c3:
         st.markdown(f'<div class="value-card"><div class="tiny">RADAR VALUE</div><div class="score">{score}</div><b>{signal}</b> at {custom_line:.1f}</div>', unsafe_allow_html=True)
+
+
+with points_tab:
+    st.markdown("## 🏀 POINTS RADAR v1")
+    st.caption("Baseline model for historical validation. No sportsbook line is used here yet.")
+
+    st.markdown("""
+    **Current inputs**
+    - PTS last 5 / last 10
+    - minutes trend
+    - FGA / FTA trend
+    - home / away split
+    - rest days
+    - optional opponent factor
+
+    **Important:** this module is built for leak-safe historical backtests.  
+    The model must only see games played before the target game.
+    """)
+
+    st.info(
+        "Run a historical test from PowerShell: "
+        'python backtest_points.py --player "Jalen Brunson" --season "2025-26"'
+    )
+
+    st.markdown("### What we measure")
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.metric("Primary metric", "MAE")
+    with c2:
+        st.metric("Validation", "±3 / ±5 pts")
+    with c3:
+        st.metric("Stage", "Baseline")
+
+    st.warning(
+        "v0.8.1 does not yet add opponent defense, pace, usage or teammate OUT impact "
+        "to the historical model. We first validate the baseline."
+    )
 
 with system_tab:
     st.markdown("## ⚙️ Preseason readiness")

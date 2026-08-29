@@ -1,66 +1,48 @@
-# Radar Value — Points Radar v1
+# Radar Value v0.8.1 — Live Rosters + Points Radar v1
 
-First isolated model for Radar Value.
+This version merges the v0.8 app with the first historical Points Radar model.
 
-## What v1 uses
-- PTS last 5
-- PTS last 10
-- minutes trend
-- FGA trend
-- FTA trend
-- 3PA stored for diagnostics
-- home/away split
-- rest days
-- optional opponent defensive factor
+## Included
+- preseason schedule
+- Radar Value logo
+- Top 3 Value — Today
+- Top Value per game
+- automatic team rosters
+- injury / availability badges
+- automatic refresh every 10 minutes
+- manual live-data refresh
+- Market Scanner
+- Line Lab
+- Points Radar v1
+- leak-safe historical backtest
+- unified `requirements.txt`
 
-The first backtest deliberately leaves opponent factor neutral. We first need
-to measure whether the basic player-form/role model works before adding more
-variables.
+## New Points Radar files
+- `points_radar.py`
+- `nba_data_service.py`
+- `backtest_points.py`
 
-## Anti-leak rule
+## Historical test
 
-For a historical game on date X, the model receives only rows dated before X.
-The actual result of X is revealed only after the projection is produced.
-
-This is the most important rule in the project.
-
-## Run first test
-
-Install:
+Install dependencies:
 
 ```powershell
 pip install -r requirements.txt
 ```
 
-Example:
+Run:
 
 ```powershell
 python backtest_points.py --player "Jalen Brunson" --season "2025-26"
 ```
 
-Output:
+The script saves `points_backtest.csv` and reports:
 - MAE
 - RMSE
 - bias
-- % predictions within 3 points
-- % predictions within 5 points
-- `points_backtest.csv` with every historical projection
+- percentage within ±3 points
+- percentage within ±5 points
 
-You can also test a local NBA-style player game-log CSV:
-
-```powershell
-python backtest_points.py --player "Jalen Brunson" --csv brunson.csv
-```
-
-Required CSV columns:
-`GAME_DATE, PTS, MIN, FGA, FTA, FG3A, MATCHUP`
-
-## Next iteration after results
-
-Do NOT add every feature immediately. Run v1 first. Then we compare misses and
-add one layer at a time:
-1. opponent defense / pace
-2. starter & role changes
-3. teammate OUT impact
-4. usage
-5. historical sportsbook line / Radar Value
+## Important
+Do not judge betting value yet. v1 validates projection quality first.
+Historical sportsbook lines will be connected after the baseline model is tested.
