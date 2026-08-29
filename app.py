@@ -7,6 +7,7 @@ import pandas as pd
 import streamlit as st
 
 from schedule_service import get_preseason_schedule
+from injury_service import get_team_roster
 
 st.set_page_config(
     page_title="Radar Value — Preseason 2026",
@@ -92,6 +93,48 @@ WARSAW = ZoneInfo("Europe/Warsaw")
 now = datetime.now(WARSAW)
 schedule, schedule_source, schedule_note = get_preseason_schedule()
 
+@st.cache_data(ttl=600, show_spinner=False)
+def cached_roster(team_name):
+    return get_team_roster(team_name)
+
+STATUS_STYLE = {
+    "OUT": ("#ff6b6b", "#35191b"),
+    "DOUBTFUL": ("#ff8b62", "#352018"),
+    "QUESTIONABLE": ("#ffc857", "#332a17"),
+    "PROBABLE": ("#79e6a7", "#173124"),
+    "DAY-TO-DAY": ("#ffd166", "#332b18"),
+    "AVAILABLE": ("#8ea0aa", "#172129"),
+}
+
+def roster_html(team_name):
+    roster, source = cached_roster(team_name)
+    if not roster:
+        return f"""
+        <div class="roster-box">
+          <div class="team-name">{team_name}</div>
+          <div class="roster-empty">Roster/injury feed is not available yet.</div>
+        </div>
+        """
+    rows = []
+    for p in roster:
+        status = p["status"]
+        fg, bg = STATUS_STYLE.get(status, ("#8ea0aa", "#172129"))
+        reason = f"<div style='color:#71808a;font-size:.72rem'>{p['reason']}</div>" if p.get("reason") else ""
+        rows.append(f"""
+        <div style='display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid #172129'>
+          <div><b>{p['name']}</b> <span style='color:#71808a;font-size:.76rem'>{p.get('position','')}</span>{reason}</div>
+          <span style='height:fit-content;background:{bg};color:{fg};border-radius:999px;padding:3px 7px;font-size:.68rem;font-weight:800'>{status}</span>
+        </div>
+        """)
+    return f"""
+    <div class="roster-box">
+      <div class="team-name">{team_name}</div>
+      <div style='color:#71808a;font-size:.72rem;margin-bottom:5px'>{source} · refresh ≤10 min</div>
+      {''.join(rows)}
+    </div>
+    """
+
+
 def game_status(row):
     status = str(row.get("status", "Upcoming")).lower()
     if "final" in status:
@@ -112,6 +155,12 @@ if logo.exists():
     with c2:
         st.image(str(logo), use_container_width=True)
 st.markdown('<div class="subtitle">See the edge. Value the game. · Preseason 2026</div>', unsafe_allow_html=True)
+
+try:
+    from streamlit_autorefresh import st_autorefresh
+    st_autorefresh(interval=600000, limit=None, key="radar_live_refresh")
+except Exception:
+    pass
 
 home_tab, scanner_tab, line_tab, system_tab = st.tabs(
     ["🏠 Home", "📡 Market Scanner", "🎚️ Line Lab", "⚙️ System"]
@@ -141,6 +190,14 @@ with home_tab:
                 <div class="pick-empty">The strongest value pick of the day will appear here after odds and player data are connected.</div>
             </div>
             """, unsafe_allow_html=True)
+
+    refresh_col, label_col = st.columns([1,4])
+    with refresh_col:
+        if st.button("↻ Refresh live data", use_container_width=True):
+            cached_roster.clear()
+            st.rerun()
+    with label_col:
+        st.caption("Rosters and availability refresh automatically every 10 minutes.")
 
     st.markdown("## 🏀 Games")
 
@@ -185,19 +242,9 @@ with home_tab:
 
         r1, r2 = st.columns(2)
         with r1:
-            st.markdown(f"""
-            <div class="roster-box">
-                <div class="team-name">{row['away']}</div>
-                <div class="roster-empty">Roster data not available yet.</div>
-            </div>
-            """, unsafe_allow_html=True)
+            st.markdown(roster_html(row["away"]), unsafe_allow_html=True)
         with r2:
-            st.markdown(f"""
-            <div class="roster-box">
-                <div class="team-name">{row['home']}</div>
-                <div class="roster-empty">Roster data not available yet.</div>
-            </div>
-            """, unsafe_allow_html=True)
+            st.markdown(roster_html(row["home"]), unsafe_allow_html=True)
         st.write("")
 
     st.caption(f"Schedule source: {schedule_source}. {schedule_note}")
@@ -241,7 +288,7 @@ with system_tab:
         ["Schedule","ACTIVE"],
         ["Top 3 day value","UI READY"],
         ["Top value per game","UI READY"],
-        ["Rosters","PENDING"],
+        ["Rosters + injury statuses","LIVE / AUTO 10 MIN"],
         ["Points Radar","UI READY"],
         ["Assists Radar","UI READY"],
         ["Rebounds Radar","UI READY"],
